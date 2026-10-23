@@ -22,3 +22,7 @@ def health_check():
     return {
         "status": "ok",
     }
+
+@app.get("/hello/{name}")
+def hello(name: str):
+    return {"status": f"Hello {name}"}
