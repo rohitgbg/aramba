@@ -27,49 +27,46 @@ uvicorn app.main:app --reload
 - `GET /health` — Health check
 - `GET /docs` — Interactive API documentation
 
-## Deploy to EC2 (beginner guide)
+## Deploy to EC2 (Amazon Linux 2023)
 
-### Step 1: Run it by hand
+The server runs two things:
 
-1. Launch an **Ubuntu** `t3.micro` instance. In the security group, allow **SSH (22)** from your IP and **Custom TCP 8000** from anywhere.
-2. Connect and set up the app:
+- `http://<public-ip>/` — your web page (files in `/usr/share/nginx/html`)
+- `http://<public-ip>/api/` — this API (e.g. `/api/health`, `/api/docs`)
+
+Nginx listens on port 80 and forwards `/api/` requests to the app on port 8000. systemd keeps the app running.
+
+### 1. Launch the instance
+
+- AMI: **Amazon Linux 2023**, instance type: `t3.micro`
+- Security group: **SSH (22)** from your IP, **HTTP (80)** from anywhere
+
+### 2. Set up the server
 
 ```bash
-ssh -i mykey.pem ubuntu@<public-ip>
+ssh -i mykey.pem ec2-user@<public-ip>
 
-sudo apt update && sudo apt install -y python3-venv
+sudo dnf install -y git
 git clone https://github.com/rohitgbg/aramba.git
 cd aramba
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-uvicorn app.main:app --host 0.0.0.0 --port 8000
+bash deploy/setup.sh
 ```
 
-3. Open `http://<public-ip>:8000/docs` in your browser.
+The last line should print `{"status":"ok"}`. The repo must be cloned to `/home/ec2-user/aramba`, because [`deploy/aramba.service`](deploy/aramba.service) uses that path.
 
-### Step 2: Keep it running with systemd
-
-So the app keeps running after you close SSH, and starts again after a reboot:
-
-```bash
-sudo cp deploy/aramba.service /etc/systemd/system/
-sudo systemctl enable --now aramba
-sudo systemctl status aramba
-```
-
-### Step 3: Put Nginx in front
-
-So people can visit `http://<public-ip>` without `:8000`. Allow **HTTP (80)** in the security group, then:
-
-```bash
-sudo apt install -y nginx
-sudo cp deploy/nginx.conf /etc/nginx/sites-available/default
-sudo systemctl restart nginx
-```
-
-### Updating the app
+### 3. Update after pushing new code
 
 ```bash
 cd ~/aramba && git pull && sudo systemctl restart aramba
 ```
+
+If `requirements.txt` changed, also run `.venv/bin/pip install -r requirements.txt` before restarting.
+
+### Troubleshooting
+
+| Problem | Check |
+|---|---|
+| `502 Bad Gateway` | The app is down: `sudo systemctl status aramba` |
+| App logs | `sudo journalctl -u aramba -f` |
+| Nginx won't start | `sudo nginx -t` shows the config error |
+| Page doesn't load at all | Port 80 allowed in the security group? |

@@ -3,9 +3,9 @@ Description=Aramba API
 After=network.target
 
 [Service]
-User=ubuntu
-WorkingDirectory=/home/ubuntu/aramba
-ExecStart=/home/ubuntu/aramba/.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000
+User=ec2-user
+WorkingDirectory=/home/ec2-user/aramba
+ExecStart=/home/ec2-user/aramba/.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000 --root-path /api
 Restart=always
 
 [Install]
