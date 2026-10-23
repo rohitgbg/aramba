@@ -27,29 +27,49 @@ uvicorn app.main:app --reload
 - `GET /health` — Health check
 - `GET /docs` — Interactive API documentation
 
-## Deploy to EC2
+## Deploy to EC2 (beginner guide)
 
-Request flow: `client → Nginx (:80/443) → Gunicorn (127.0.0.1:8000) → Uvicorn workers → FastAPI`
+### Step 1: Run it by hand
 
-1. Launch an Ubuntu 24.04 `t3.micro`. Security group: SSH (22) from your IP, HTTP (80) and HTTPS (443) from anywhere.
-2. Under **Advanced details → User data**, paste the contents of [`deploy/user-data.sh`](deploy/user-data.sh).
-3. Wait ~2 minutes, then open `http://<public-ip>/health`.
-
-Setup logs: `sudo tail -f /var/log/cloud-init-output.log`
-
-### Useful commands on the server
+1. Launch an **Ubuntu** `t3.micro` instance. In the security group, allow **SSH (22)** from your IP and **Custom TCP 8000** from anywhere.
+2. Connect and set up the app:
 
 ```bash
-sudo systemctl status aramba      # is the app running?
-sudo journalctl -u aramba -f      # app logs
-bash /opt/aramba/deploy/update.sh # deploy latest code from main
+ssh -i mykey.pem ubuntu@<public-ip>
+
+sudo apt update && sudo apt install -y python3-venv
+git clone https://github.com/rohitgbg/aramba.git
+cd aramba
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
 
-### HTTPS
+3. Open `http://<public-ip>:8000/docs` in your browser.
 
-Point your domain's A record at the instance's Elastic IP, set `server_name` in `/etc/nginx/sites-available/aramba`, then:
+### Step 2: Keep it running with systemd
+
+So the app keeps running after you close SSH, and starts again after a reboot:
 
 ```bash
-sudo apt install -y certbot python3-certbot-nginx
-sudo certbot --nginx -d api.yourdomain.com
+sudo cp deploy/aramba.service /etc/systemd/system/
+sudo systemctl enable --now aramba
+sudo systemctl status aramba
+```
+
+### Step 3: Put Nginx in front
+
+So people can visit `http://<public-ip>` without `:8000`. Allow **HTTP (80)** in the security group, then:
+
+```bash
+sudo apt install -y nginx
+sudo cp deploy/nginx.conf /etc/nginx/sites-available/default
+sudo systemctl restart nginx
+```
+
+### Updating the app
+
+```bash
+cd ~/aramba && git pull && sudo systemctl restart aramba
 ```
